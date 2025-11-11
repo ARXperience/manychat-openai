@@ -83,11 +83,19 @@ app.post("/analyze", async (req, res) => {
 
       // Intenta convertir a JSON
       parsedResult = JSON.parse(cleanText);
-    } catch (e) {
-      // Si no logra parsear JSON, busca un VIN directamente
-      const match = textResult.match(/[A-HJ-NPR-Z0-9]{17}/);
-      parsedResult = match ? { numero_chasis: match[0] } : { raw_text: textResult };
-    }
+   } catch (e) {
+  console.warn("⚠️ No se pudo parsear JSON, devolviendo texto limpio...");
+  const cleanFallback = textResult
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .replace(/El número de chasis.*?es/i, "")
+    .replace(/VIN.*?es/i, "")
+    .replace(/[\*\:]/g, "")
+    .trim();
+
+  parsedResult = { texto_crudo: cleanFallback };
+}
+
 
     // 🧹 Normaliza los nombres de las claves (quita tildes, ñ, etc.)
     parsedResult = normalizeKeys(parsedResult);
