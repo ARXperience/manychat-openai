@@ -100,6 +100,17 @@ app.post("/analyze", async (req, res) => {
     // 🧹 Normaliza los nombres de las claves (quita tildes, ñ, etc.)
     parsedResult = normalizeKeys(parsedResult);
 
+    // Asegura que todos los campos esperados existan
+const expectedKeys = [
+  "placa", "linea", "modelo", "clase", "carroceria",
+  "numero_de_chasis", "numero_de_motor", "propietario", "identificacion"
+];
+
+expectedKeys.forEach(key => {
+  if (!(key in parsedResult)) parsedResult[key] = "";
+});
+
+
     // 📤 Devuelve el JSON final
     res.json({ result: parsedResult });
 
