@@ -73,7 +73,25 @@ try {
   parsedResult = match ? { numero_chasis: match[0] } : { raw_text: textResult };
 }
 
+// Normaliza las claves del JSON eliminando tildes y caracteres especiales
+function normalizeKeys(obj) {
+  const newObj = {};
+  for (const key in obj) {
+    const normalizedKey = key
+      .normalize("NFD") // separa acentos
+      .replace(/[\u0300-\u036f]/g, "") // elimina acentos
+      .replace(/[^a-zA-Z0-9_]/g, "_") // reemplaza símbolos raros por guión bajo
+      .toLowerCase();
+
+    newObj[normalizedKey] = obj[key];
+  }
+  return newObj;
+}
+
+parsedResult = normalizeKeys(parsedResult);
+
 res.json({ result: parsedResult });
+
 
 
   } catch (error) {
