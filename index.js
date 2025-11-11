@@ -8,8 +8,22 @@ dotenv.config();
 const app = express();
 app.use(bodyParser.json());
 
-// Clave de OpenAI (se recomienda ponerla en Render como variable de entorno)
+// Clave de OpenAI (usa variable de entorno en Render)
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// 🧠 Función para limpiar y normalizar nombres de claves
+function normalizeKeys(obj) {
+  const newObj = {};
+  for (const key in obj) {
+    const normalizedKey = key
+      .normalize("NFD") // separa acentos
+      .replace(/[\u0300-\u036f]/g, "") // elimina tildes
+      .replace(/[^a-zA-Z0-9_]/g, "_") // reemplaza símbolos raros
+      .toLowerCase();
+    newObj[normalizedKey] = obj[key];
+  }
+  return newObj;
+}
 
 app.post("/analyze", async (req, res) => {
   try {
@@ -20,6 +34,7 @@ app.post("/analyze", async (req, res) => {
       return res.status(400).json({ error: "Falta el parámetro 'image_url'" });
     }
 
+    // 📸 Llamada a la API de OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -42,42 +57,43 @@ app.post("/analyze", async (req, res) => {
 
     const data = await response.json();
 
-    // Captura de errores de la API
+    // ⚠️ Si hay error en la API
     if (!response.ok) {
       console.error("Error API:", data);
       return res.status(500).json({ error: data });
     }
 
-let textResult =
-  data.output_text ||
-  (data.output && data.output[0]?.content[0]?.text) ||
-  "No se pudo analizar la imagen.";
+    // 🧩 Limpieza del texto devuelto por OpenAI
+    let textResult =
+      data.output_text ||
+      (data.output && data.output[0]?.content[0]?.text) ||
+      "No se pudo analizar la imagen.";
 
-let parsedResult;
+    let parsedResult;
 
-try {
-  // Limpieza de formatos y bloques de código
-  const cleanText = textResult
-    .replace(/```json/g, "")
-    .replace(/```/g, "")
-    .replace(/El número de chasis.*?es/i, "") // quita frases como “El número de chasis ... es”
-    .replace(/VIN.*?es/i, "") // quita frases con “VIN ... es”
-    .replace(/[\*\:]/g, "") // limpia asteriscos o dos puntos extra
-    .trim();
+    try {
+      // Limpieza de posibles formatos de bloque de código
+      const cleanText = textResult
+        .replace(/```json/g, "")
+        .replace(/```/g, "")
+        .replace(/El número de chasis.*?es/i, "")
+        .replace(/VIN.*?es/i, "")
+        .replace(/[\*\:]/g, "")
+        .trim();
 
-  // Intenta convertir a JSON
-  parsedResult = JSON.parse(cleanText);
-} catch (e) {
-  // Si no es JSON, intenta extraer solo el VIN si aparece en el texto
-  const match = textResult.match(/[A-HJ-NPR-Z0-9]{17}/); // patrón típico de VIN
-  parsedResult = match ? { numero_chasis: match[0] } : { raw_text: textResult };
-}
+      // Intenta convertir a JSON
+      parsedResult = JSON.parse(cleanText);
+    } catch (e) {
+      // Si no logra parsear JSON, busca un VIN directamente
+      const match = textResult.match(/[A-HJ-NPR-Z0-9]{17}/);
+      parsedResult = match ? { numero_chasis: match[0] } : { raw_text: textResult };
+    }
 
+    // 🧹 Normaliza los nombres de las claves (quita tildes, ñ, etc.)
+    parsedResult = normalizeKeys(parsedResult);
 
-
-res.json({ result: parsedResult });
-
-
+    // 📤 Devuelve el JSON final
+    res.json({ result: parsedResult });
 
   } catch (error) {
     console.error("Error interno:", error);
