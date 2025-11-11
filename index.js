@@ -48,12 +48,27 @@ app.post("/analyze", async (req, res) => {
       return res.status(500).json({ error: data });
     }
 
-    const result =
-      data.output_text ||
-      (data.output && data.output[0]?.content[0]?.text) ||
-      "No se pudo analizar la imagen.";
+let textResult =
+  data.output_text ||
+  (data.output && data.output[0]?.content[0]?.text) ||
+  "No se pudo analizar la imagen.";
 
-    res.json({ result });
+let parsedResult;
+
+// Limpieza de bloques de texto tipo ```json
+try {
+  const cleanText = textResult
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  parsedResult = JSON.parse(cleanText);
+} catch (e) {
+  parsedResult = { raw_text: textResult };
+}
+
+res.json({ result: parsedResult });
+
   } catch (error) {
     console.error("Error interno:", error);
     res.status(500).json({ error: "Error analizando la imagen" });
