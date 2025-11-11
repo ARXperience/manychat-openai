@@ -48,20 +48,12 @@ app.post("/analyze", async (req, res) => {
       return res.status(500).json({ error: data });
     }
 
-    let textResult =
-  data.output_text ||
-  (data.output && data.output[0]?.content[0]?.text) ||
-  "No se pudo analizar la imagen.";
+    const result =
+      data.output_text ||
+      (data.output && data.output[0]?.content[0]?.text) ||
+      "No se pudo analizar la imagen.";
 
-let parsedResult;
-try {
-  parsedResult = JSON.parse(textResult);
-} catch (e) {
-  parsedResult = { raw_text: textResult };
-}
-
-res.json({ result: parsedResult });
-
+    res.json({ result });
   } catch (error) {
     console.error("Error interno:", error);
     res.status(500).json({ error: "Error analizando la imagen" });
