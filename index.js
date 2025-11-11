@@ -55,19 +55,26 @@ let textResult =
 
 let parsedResult;
 
-// Limpieza de bloques de texto tipo ```json
 try {
+  // Limpieza de formatos y bloques de código
   const cleanText = textResult
     .replace(/```json/g, "")
     .replace(/```/g, "")
+    .replace(/El número de chasis.*?es/i, "") // quita frases como “El número de chasis ... es”
+    .replace(/VIN.*?es/i, "") // quita frases con “VIN ... es”
+    .replace(/[\*\:]/g, "") // limpia asteriscos o dos puntos extra
     .trim();
 
+  // Intenta convertir a JSON
   parsedResult = JSON.parse(cleanText);
 } catch (e) {
-  parsedResult = { raw_text: textResult };
+  // Si no es JSON, intenta extraer solo el VIN si aparece en el texto
+  const match = textResult.match(/[A-HJ-NPR-Z0-9]{17}/); // patrón típico de VIN
+  parsedResult = match ? { numero_chasis: match[0] } : { raw_text: textResult };
 }
 
 res.json({ result: parsedResult });
+
 
   } catch (error) {
     console.error("Error interno:", error);
