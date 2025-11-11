@@ -8,38 +8,26 @@ dotenv.config();
 const app = express();
 app.use(bodyParser.json());
 
-// Clave de OpenAI (usa variable de entorno en Render)
+// 🔐 Clave de OpenAI (colócala en las variables de entorno de Render)
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-// 🧠 Función para limpiar y normalizar nombres de claves
-function normalizeKeys(obj) {
-  const newObj = {};
-  for (const key in obj) {
-    const normalizedKey = key
-      .normalize("NFD") // separa acentos
-      .replace(/[\u0300-\u036f]/g, "") // elimina tildes
-      .replace(/[^a-zA-Z0-9_]/g, "_") // reemplaza símbolos raros
-      .toLowerCase();
-    newObj[normalizedKey] = obj[key];
-  }
-  return newObj;
-}
 
 app.post("/analyze", async (req, res) => {
   try {
     const imageUrl = req.body.image_url;
-    const userPrompt = req.body.prompt || "Describe esta imagen en detalle.";
+    const userPrompt =
+      req.body.prompt ||
+      "Extrae todos los datos visibles del documento de tránsito colombiano. Devuelve exclusivamente un objeto JSON limpio con las siguientes claves exactas y en minúsculas: {placa, linea, modelo, clase, carroceria, numero_de_chasis, numero_de_motor, propietario, identificacion}. No incluyas texto adicional ni encabezados.";
 
     if (!imageUrl) {
       return res.status(400).json({ error: "Falta el parámetro 'image_url'" });
     }
 
-    // 📸 Llamada a la API de OpenAI
+    // 🔗 Llamada a la API de OpenAI
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
@@ -48,81 +36,66 @@ app.post("/analyze", async (req, res) => {
             role: "user",
             content: [
               { type: "input_text", text: userPrompt },
-              { type: "input_image", image_url: imageUrl }
-            ]
-          }
-        ]
-      })
+              { type: "input_image", image_url: imageUrl },
+            ],
+          },
+        ],
+      }),
     });
 
     const data = await response.json();
 
-    // ⚠️ Si hay error en la API
     if (!response.ok) {
-      console.error("Error API:", data);
+      console.error("❌ Error API OpenAI:", data);
       return res.status(500).json({ error: data });
     }
 
-    // 🧩 Limpieza del texto devuelto por OpenAI
-    let textResult =
+    // 🧠 Extraer texto principal
+    let resultText =
       data.output_text ||
       (data.output && data.output[0]?.content[0]?.text) ||
       "No se pudo analizar la imagen.";
 
-    let parsedResult;
-
+    // 🧹 Intentar convertir el texto en JSON válido
+    let parsedResult = {};
     try {
-      // Limpieza de posibles formatos de bloque de código
-      const cleanText = textResult
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .replace(/El número de chasis.*?es/i, "")
-        .replace(/VIN.*?es/i, "")
-        .replace(/[\*\:]/g, "")
-        .trim();
+      const jsonMatch = resultText.match(/{[\s\S]*}/);
+      if (jsonMatch) {
+        const fixedText = jsonMatch[0]
+          .replace(/(\w+)\s+"([^"]+)"/g, '"$1": "$2"') // corrige claves sin ':'
+          .replace(/[\n\r\t]/g, " "); // elimina saltos de línea
+        parsedResult = JSON.parse(fixedText);
+      }
+    } catch (err) {
+      console.error("⚠️ Error al parsear JSON:", err);
+    }
 
-      // Intenta convertir a JSON
-      parsedResult = JSON.parse(cleanText);
-   } catch (e) {
-  console.warn("⚠️ No se pudo parsear JSON, devolviendo texto limpio...");
-  const cleanFallback = textResult
-    .replace(/```json/g, "")
-    .replace(/```/g, "")
-    .replace(/El número de chasis.*?es/i, "")
-    .replace(/VIN.*?es/i, "")
-    .replace(/[\*\:]/g, "")
-    .trim();
+    // 🧩 Estructura garantizada para ManyChat
+    const cleanResult = {
+      placa: parsedResult.placa || "",
+      linea: parsedResult.linea || "",
+      modelo: parsedResult.modelo || "",
+      clase: parsedResult.clase || "",
+      carroceria: parsedResult.carroceria || "",
+      numero_de_chasis: parsedResult.numero_de_chasis || "",
+      numero_de_motor: parsedResult.numero_de_motor || "",
+      propietario: parsedResult.propietario || "",
+      identificacion: parsedResult.identificacion || "",
+      texto_crudo: resultText || "",
+    };
 
-  parsedResult = { texto_crudo: cleanFallback };
-}
-
-
-    // 🧹 Normaliza los nombres de las claves (quita tildes, ñ, etc.)
-    parsedResult = normalizeKeys(parsedResult);
-
-    // Asegura que todos los campos esperados existan
-const expectedKeys = [
-  "placa", "linea", "modelo", "clase", "carroceria",
-  "numero_de_chasis", "numero_de_motor", "propietario", "identificacion"
-];
-
-expectedKeys.forEach(key => {
-  if (!(key in parsedResult)) parsedResult[key] = "";
-});
-
-
-    // 📤 Devuelve el JSON final
-    res.json({ result: parsedResult });
-
+    res.json({ result: cleanResult });
   } catch (error) {
-    console.error("Error interno:", error);
+    console.error("💥 Error interno del servidor:", error);
     res.status(500).json({ error: "Error analizando la imagen" });
   }
 });
 
+// 🔍 Ruta de prueba
 app.get("/", (req, res) => {
-  res.send("Servidor activo. Endpoint: /analyze");
+  res.send("✅ Servidor activo. Endpoint disponible en /analyze");
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor escuchando en puerto ${PORT}`));
+// 🔊 Puerto automático asignado por Render
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🚀 Servidor escuchando en puerto ${PORT}`));
